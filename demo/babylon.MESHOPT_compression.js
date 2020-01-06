@@ -30,7 +30,7 @@ var MESHOPT_compression = /** @class */ (function () {
                 var result = new Uint8Array(new ArrayBuffer(count * stride));
                 switch (extensionDef.mode) {
                     case 0:
-                        decoder.decodeVertexBuffer(result, count, stride, source);
+                        decoder.decodeVertexBuffer(result, count, stride, source, extensionDef.filter);
                         break;
                     case 1:
                         decoder.decodeIndexBuffer(result, count, stride, source);

@@ -1054,7 +1054,7 @@ THREE.GLTFLoader = ( function () {
 			switch ( extensionDef.mode ) {
 
 				case 0:
-					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, source);
+					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, source, extensionDef.filter);
 					break;
 
 				case 1:
