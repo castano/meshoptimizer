@@ -636,7 +636,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 
 	double middle = timestamp();
 
-	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
+	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size(), 0);
 	assert(res == 0);
 	(void)res;
 

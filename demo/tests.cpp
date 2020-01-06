@@ -200,7 +200,7 @@ static void decodeVertexV0()
 	std::vector<unsigned char> buffer(kVertexDataV0, kVertexDataV0 + sizeof(kVertexDataV0));
 
 	PV decoded[vertex_count];
-	assert(meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), &buffer[0], buffer.size()) == 0);
+	assert(meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), &buffer[0], buffer.size(), 0) == 0);
 	assert(memcmp(decoded, kVertexBuffer, sizeof(kVertexBuffer)) == 0);
 }
 
@@ -237,7 +237,7 @@ static void decodeVertexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), i == 0 ? 0 : &shortbuffer[0], i);
+		int result = meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), i == 0 ? 0 : &shortbuffer[0], i, 0);
 		(void)result;
 
 		if (i == buffer.size())
@@ -259,7 +259,7 @@ static void decodeVertexRejectExtraBytes()
 	largebuffer.push_back(0);
 
 	PV decoded[vertex_count];
-	assert(meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), &largebuffer[0], largebuffer.size()) < 0);
+	assert(meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), &largebuffer[0], largebuffer.size(), 0) < 0);
 }
 
 static void decodeVertexRejectMalformedHeaders()
@@ -274,7 +274,7 @@ static void decodeVertexRejectMalformedHeaders()
 	brokenbuffer[0] = 0;
 
 	PV decoded[vertex_count];
-	assert(meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), &brokenbuffer[0], brokenbuffer.size()) < 0);
+	assert(meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), &brokenbuffer[0], brokenbuffer.size(), 0) < 0);
 }
 
 static void decodeVertexBitGroups()
@@ -294,7 +294,7 @@ static void decodeVertexBitGroups()
 	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 16, 4));
 
 	unsigned char decoded[16 * 4];
-	assert(meshopt_decodeVertexBuffer(decoded, 16, 4, &buffer[0], buffer.size()) == 0);
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 4, &buffer[0], buffer.size(), 0) == 0);
 	assert(memcmp(decoded, data, sizeof(data)) == 0);
 }
 
@@ -325,7 +325,7 @@ static void decodeVertexBitGroupSentinels()
 	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 16, 4));
 
 	unsigned char decoded[16 * 4];
-	assert(meshopt_decodeVertexBuffer(decoded, 16, 4, &buffer[0], buffer.size()) == 0);
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 4, &buffer[0], buffer.size(), 0) == 0);
 	assert(memcmp(decoded, data, sizeof(data)) == 0);
 }
 
@@ -346,7 +346,7 @@ static void decodeVertexLarge()
 	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 128, 4));
 
 	unsigned char decoded[128 * 4];
-	assert(meshopt_decodeVertexBuffer(decoded, 128, 4, &buffer[0], buffer.size()) == 0);
+	assert(meshopt_decodeVertexBuffer(decoded, 128, 4, &buffer[0], buffer.size(), 0) == 0);
 	assert(memcmp(decoded, data, sizeof(data)) == 0);
 }
 

@@ -139,7 +139,7 @@ ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), indices, index_coun
 You can then either serialize `vbuf`/`ibuf` as is, or compress them further. To decode the data at runtime, call decoding functions:
 
 ```c++
-int resvb = meshopt_decodeVertexBuffer(vertices, vertex_count, sizeof(Vertex), &vbuf[0], vbuf.size());
+int resvb = meshopt_decodeVertexBuffer(vertices, vertex_count, sizeof(Vertex), &vbuf[0], vbuf.size(), 0);
 int resib = meshopt_decodeIndexBuffer(indices, index_count, &buffer[0], buffer.size());
 assert(resvb == 0 && resib == 0);
 ```
