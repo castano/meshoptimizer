@@ -388,7 +388,7 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 	return data;
 }
 
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], void (*filter)(void* buffer, size_t vertex_count, size_t vertex_size))
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -419,10 +419,6 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	}
 
 	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
-
-	if (filter)
-		filter(transposed, vertex_count, vertex_size);
-
 	memcpy(vertex_data, transposed, vertex_count * vertex_size);
 
 	return data;
@@ -951,7 +947,7 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 }
 
 SIMD_TARGET
-static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], void (*filter)(void* buffer, size_t vertex_count, size_t vertex_size))
+static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -1042,10 +1038,6 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 	}
 
 	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
-
-	if (filter)
-		filter(transposed, vertex_count_aligned, vertex_size);
-
 	memcpy(vertex_data, transposed, vertex_count * vertex_size);
 
 	return data;
@@ -1170,14 +1162,14 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 	return 1 + vertex_block_count * vertex_size * (vertex_block_header_size + vertex_block_data_size) + tail_size;
 }
 
-int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size, void (*filter)(void* buffer, size_t vertex_count, size_t vertex_size))
+int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size % 4 == 0);
 
-	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256], void (*)(void*, size_t, size_t)) = 0;
+	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256]) = 0;
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
 	decode = (cpuid & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
@@ -1214,7 +1206,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	{
 		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = decode(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, filter);
+		data = decode(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
 		if (!data)
 			return -2;
 
@@ -1235,32 +1227,42 @@ void meshopt_decodeFilterReconstructZ(void* buffer, size_t vertex_count, size_t 
 
 	if (vertex_size == 4)
 	{
+	#ifdef SIMD_WASM
+		volatile // workaround to prevent autovectorization
+	#endif
+		float scale = 127.f;
+
 		signed char* data = static_cast<signed char*>(buffer);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			float x = float(data[i * 4 + 0]) / 127.f;
-			float y = float(data[i * 4 + 1]) / 127.f;
+			float x = float(data[i * 4 + 0]) / scale;
+			float y = float(data[i * 4 + 1]) / scale;
 
 			float zz = 1.f - x * x - y * y;
 			float z = sqrtf(zz >= 0.f ? zz : 0.f);
-			int zf = int(z * 127.f + 0.5f);
+			int zf = int(z * scale + 0.5f);
 
 			data[i * 4 + 2] = (signed char)(data[i * 4 + 2] ? -zf : zf);
 		}
 	}
 	else
 	{
+	#ifdef SIMD_WASM
+		volatile // workaround to prevent autovectorization
+	#endif
+		float scale = 32767.f;
+
 		short* data = static_cast<short*>(buffer);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			float x = float(data[i * 4 + 0]) / 32767.f;
-			float y = float(data[i * 4 + 1]) / 32767.f;
+			float x = float(data[i * 4 + 0]) / scale;
+			float y = float(data[i * 4 + 1]) / scale;
 
 			float zz = 1.f - x * x - y * y;
 			float z = sqrtf(zz >= 0.f ? zz : 0.f);
-			int zf = int(z * 32767.f + 0.5f);
+			int zf = int(z * scale + 0.5f);
 
 			data[i * 4 + 2] = short(data[i * 4 + 2] ? -zf : zf);
 		}
@@ -1273,13 +1275,18 @@ void meshopt_decodeFilterReconstructW(void* buffer, size_t vertex_count, size_t 
 
 	if (vertex_size == 4)
 	{
+	#ifdef SIMD_WASM
+		volatile // workaround to prevent autovectorization
+	#endif
+		float scale = 127.f;
+
 		signed char* data = static_cast<signed char*>(buffer);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			float x = float(data[i * 4 + 0]) / 127.f;
-			float y = float(data[i * 4 + 1]) / 127.f;
-			float z = float(data[i * 4 + 2]) / 127.f;
+			float x = float(data[i * 4 + 0]) / scale;
+			float y = float(data[i * 4 + 1]) / scale;
+			float z = float(data[i * 4 + 2]) / scale;
 
 			float ww = 1.f - x * x - y * y - z * z;
 			float w = sqrtf(ww >= 0.f ? ww : 0.f);
@@ -1290,13 +1297,18 @@ void meshopt_decodeFilterReconstructW(void* buffer, size_t vertex_count, size_t 
 	}
 	else
 	{
+	#ifdef SIMD_WASM
+		volatile // workaround to prevent autovectorization
+	#endif
+		float scale = 32767.f;
+
 		short* data = static_cast<short*>(buffer);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			float x = float(data[i * 4 + 0]) / 32767.f;
-			float y = float(data[i * 4 + 1]) / 32767.f;
-			float z = float(data[i * 4 + 2]) / 32767.f;
+			float x = float(data[i * 4 + 0]) / scale;
+			float y = float(data[i * 4 + 1]) / scale;
+			float z = float(data[i * 4 + 2]) / scale;
 
 			float ww = 1.f - x * x - y * y - z * z;
 			float w = sqrtf(ww >= 0.f ? ww : 0.f);
@@ -1306,20 +1318,3 @@ void meshopt_decodeFilterReconstructW(void* buffer, size_t vertex_count, size_t 
 		}
 	}
 }
-
-#ifdef EMSCRIPTEN
-extern "C" void (*meshopt_decodeFilter(int filter))(void*,size_t,size_t)
-{
-	switch (filter)
-	{
-		case 1:
-			return &meshopt_decodeFilterReconstructZ;
-
-		case 2:
-			return &meshopt_decodeFilterReconstructW;
-
-		default:
-			return 0;
-	}
-}
-#endif

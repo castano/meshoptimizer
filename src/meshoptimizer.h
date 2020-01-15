@@ -200,13 +200,12 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, si
  * The decoder is safe to use for untrusted input, but it may produce garbage data.
  *
  * destination must contain enough space for the resulting vertex buffer (vertex_count * vertex_size bytes)
- * filter will optionally be called on blocks of decoded vertex data to perform final post-processing
  */
-MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size, void (*filter)(void* buffer, size_t vertex_count, size_t vertex_size));
+MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size);
 
 /**
  * Vertex buffer filters
- * These functions can be used as filter arguments to meshopt_decodeVertexBuffer
+ * These functions can be used to filter output of meshopt_decodeVertexBuffer
  *
  * meshopt_decodeFilterReconstructZ computes Z as sign * sqrt(1 - x^2 - y^2), and assumes X/Y/Z are using quantized bytes (vertex_size = 4) or shorts (vertex_size = 8).
  * meshopt_decodeFilterReconstructW computes W as sign * sqrt(1 - x^2 - y^2 - z^2), and assumes X/Y/Z/W are using quantized bytes (vertex_size = 4) or shorts (vertex_size = 8).
