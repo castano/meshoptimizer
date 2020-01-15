@@ -74,8 +74,8 @@
 #endif
 
 #ifdef SIMD_WASM
-#define wasmx_shuffle_v32x4(v, i, j, k, l) wasm_v8x16_shuffle(v, v, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * j, 4 * j + 1, 4 * j + 2, 4 * j + 3, 4 * k, 4 * k + 1, 4 * k + 2, 4 * k + 3, 4 * l, 4 * l + 1, 4 * l + 2, 4 * l + 3)
-#define wasmx_splat_v32x4(v, i) wasmx_shuffle_v32x4(v, i, i, i, i)
+#define wasmx_swizzle_v32x4(v, i, j, k, l) wasm_v8x16_shuffle(v, v, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * j, 4 * j + 1, 4 * j + 2, 4 * j + 3, 4 * k, 4 * k + 1, 4 * k + 2, 4 * k + 3, 4 * l, 4 * l + 1, 4 * l + 2, 4 * l + 3)
+#define wasmx_splat_v32x4(v, i) wasmx_swizzle_v32x4(v, i, i, i, i)
 #define wasmx_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23)
 #define wasmx_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31)
 #define wasmx_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 16, 17, 2, 3, 18, 19, 4, 5, 20, 21, 6, 7, 22, 23)
@@ -732,7 +732,7 @@ static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 
 static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1)
 {
-	v128_t mask_0 = wasmx_shuffle_v32x4(mask, 0, 2, 1, 3);
+	v128_t mask_0 = wasmx_swizzle_v32x4(mask, 0, 2, 1, 3);
 
 	// TODO: when Chrome supports v128.const we can try doing vectorized and?
 	uint64_t mask_1a = wasm_i64x2_extract_lane(mask_0, 0) & 0x0804020108040201ull;
@@ -1227,12 +1227,50 @@ void meshopt_decodeFilterReconstructZ(void* buffer, size_t vertex_count, size_t 
 
 	if (vertex_size == 4)
 	{
-	#ifdef SIMD_WASM
-		volatile // workaround to prevent autovectorization
-	#endif
-		float scale = 127.f;
-
 		signed char* data = static_cast<signed char*>(buffer);
+
+	#ifdef SIMD_WASM
+		for (size_t i = 0; i < vertex_count; i += 4)
+		{
+			v128_t n4 = wasm_v128_load(&data[i * 4]);
+
+			// sign-extends each of x,y in [x y ? ?] with arithmetic shifts
+			v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 24), 24);
+			v128_t yf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 16), 24);
+
+			// 0 iff n2 is 0
+			v128_t n2 = wasm_v128_and(n4, wasm_i32x4_splat(0xff0000));
+			// TODO: when v8 fixes shift codegen, this can be a bit faster:
+			// v128_t zs = wasm_i32x4_shr(wasm_i32x4_shl(n4, 15), 31);
+
+			// convert x and y to [-1..1]
+			v128_t x = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(xf), wasm_f32x4_splat(1.f / 127.f));
+			v128_t y = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(yf), wasm_f32x4_splat(1.f / 127.f));
+
+			// 1 - x^2 - y^2
+			v128_t zz = wasm_f32x4_sub(wasm_f32x4_splat(1.f), wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_mul(y, y)));
+
+			// zm clamps negative values to 0.f to avoid NaNs
+			// TODO: alternatively we can try shr + andnot
+			v128_t zm = wasm_f32x4_ge(zz, wasm_f32x4_splat(0.f));
+			v128_t z = wasm_f32x4_sqrt(wasm_v128_and(zz, zm));
+
+			v128_t zx = wasm_f32x4_add(wasm_f32x4_mul(z, wasm_f32x4_splat(127.f)), wasm_f32x4_splat(0.5f));
+			v128_t zf = wasm_i32x4_trunc_saturate_f32x4(zx);
+
+			// zs: 0 iff n2 is 0, -1 iff n2 is not 0
+			// zr: branchless (zs ? -zf : zf) using -zf = (-1 ^ zf) - (-1) identity
+			v128_t zs = wasm_i32x4_ne(n2, wasm_i32x4_splat(0));
+			v128_t zr = wasm_i32x4_sub(wasm_v128_xor(zs, zf), zs);
+
+			// merge zr into the correct byte location in the output
+			// TODO: can this be done with byte shuffle somehow? bitselect is not super efficient
+			v128_t r = wasm_v128_bitselect(wasm_i32x4_shl(zr, 16), n4, wasm_i32x4_splat(0xff0000));
+
+			wasm_v128_store(&data[i * 4], r);
+		}
+	#else
+		float scale = 127.f;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
@@ -1245,6 +1283,7 @@ void meshopt_decodeFilterReconstructZ(void* buffer, size_t vertex_count, size_t 
 
 			data[i * 4 + 2] = (signed char)(data[i * 4 + 2] ? -zf : zf);
 		}
+	#endif
 	}
 	else
 	{
