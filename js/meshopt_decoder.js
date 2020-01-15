@@ -76,7 +76,7 @@ var MeshoptDecoder = (function() {
 			if (!df) {
 				throw new Error("Unsupported mode");
 			}
-			var ff = (filter == 1) ? instance.exports.meshopt_decodeFilterReconstructZ : (mode == 2) ? instance.exports.meshopt_decodeFilterReconstructW : undefined;
+			var ff = (filter == 1) ? instance.exports.meshopt_decodeFilterReconstructZ : (filter == 2) ? instance.exports.meshopt_decodeFilterReconstructW : undefined;
 			decode(df, target, count, size, source, ff);
 		}
 	};
