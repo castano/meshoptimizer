@@ -1251,12 +1251,12 @@ void meshopt_decodeFilterReconstructZ(void* buffer, size_t vertex_count, size_t 
 			v128_t zz = wasm_f32x4_sub(wasm_f32x4_splat(1.f), wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_mul(y, y)));
 
 			// zm clamps negative values to 0.f to avoid NaNs
-			// TODO: alternatively we can try shr + andnot
 			v128_t zm = wasm_f32x4_ge(zz, wasm_f32x4_splat(0.f));
 			v128_t z = wasm_f32x4_sqrt(wasm_v128_and(zz, zm));
 
-			v128_t zx = wasm_f32x4_add(wasm_f32x4_mul(z, wasm_f32x4_splat(127.f)), wasm_f32x4_splat(0.5f));
-			v128_t zf = wasm_i32x4_trunc_saturate_f32x4(zx);
+			// fast rounded float->int: addition triggers renormalization after which mantissa stores the integer value
+			v128_t zx = wasm_f32x4_mul(z, wasm_f32x4_splat(127.f));
+			v128_t zf = wasm_v128_and(wasm_f32x4_add(zx, wasm_f32x4_splat(1 << 23)), wasm_i32x4_splat(0x7fffff));
 
 			// zs: 0 iff n2 is 0, -1 iff n2 is not 0
 			// zr: branchless (zs ? -zf : zf) using -zf = (-1 ^ zf) - (-1) identity
