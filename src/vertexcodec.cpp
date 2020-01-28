@@ -1361,6 +1361,7 @@ void meshopt_decodeFilterReconstructW(void* buffer, size_t vertex_count, size_t 
 void meshopt_decodeFilterReconstructQ(void* buffer, size_t vertex_count, size_t vertex_size)
 {
 	assert(vertex_size == 8);
+	(void)vertex_size;
 
 	static const int order[4][4] =
 	{
