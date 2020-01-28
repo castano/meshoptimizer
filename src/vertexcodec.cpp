@@ -1394,9 +1394,9 @@ void meshopt_decodeFilterReconstructQ(void* buffer, size_t vertex_count, size_t 
 
 		int qc = data[i * 4 + 3] & 3;
 
-		data[i * 4 + order[qc][0]] = xf;
-		data[i * 4 + order[qc][1]] = yf;
-		data[i * 4 + order[qc][2]] = zf;
-		data[i * 4 + order[qc][3]] = wf;
+		data[i * 4 + order[qc][0]] = short(xf);
+		data[i * 4 + order[qc][1]] = short(yf);
+		data[i * 4 + order[qc][2]] = short(zf);
+		data[i * 4 + order[qc][3]] = short(wf);
 	}
 }
