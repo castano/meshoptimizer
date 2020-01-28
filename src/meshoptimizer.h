@@ -213,6 +213,7 @@ MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t verte
  */
 MESHOPTIMIZER_API void meshopt_decodeFilterReconstructZ(void* buffer, size_t vertex_count, size_t vertex_size);
 MESHOPTIMIZER_API void meshopt_decodeFilterReconstructW(void* buffer, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_API void meshopt_decodeFilterReconstructQ(void* buffer, size_t vertex_count, size_t vertex_size);
 
 /**
  * Experimental: Mesh simplifier

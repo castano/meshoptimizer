@@ -193,6 +193,7 @@ struct BufferView
 		Filter_None,
 		Filter_ReconstructZ,
 		Filter_ReconstructW,
+		Filter_ReconstructQ,
 	};
 
 	Kind kind;
@@ -1903,26 +1904,58 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
-		bool reconstruct = settings.compress;
-
-		for (size_t i = 0; i < data.size(); ++i)
+		if (settings.compressmore)
 		{
-			const Attr& a = data[i];
+			float scaler = sqrtf(2.f);
 
-			int16_t v[4] = {
-			    int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
-			    int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
-			    int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
-			    int16_t(reconstruct ? a.f[3] < 0.f : meshopt_quantizeSnorm(a.f[3], 16)),
-			};
+			for (size_t i = 0; i < data.size(); ++i)
+			{
+				const Attr& a = data[i];
 
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				int qc = 0;
+				qc = fabsf(a.f[1]) > fabsf(a.f[qc]) ? 1 : qc;
+				qc = fabsf(a.f[2]) > fabsf(a.f[qc]) ? 2 : qc;
+				qc = fabsf(a.f[3]) > fabsf(a.f[qc]) ? 3 : qc;
+
+				float sign = a.f[qc] < 0.f ? -1.f : 1.f;
+
+				float vv[3];
+
+				for (int k = 0; k < 3; ++k)
+					vv[k] = a.f[(qc + 1 + k) & 3];
+
+				int16_t v[4] = {
+				    int16_t(meshopt_quantizeSnorm(vv[0] * scaler * sign, 12)),
+				    int16_t(meshopt_quantizeSnorm(vv[1] * scaler * sign, 12)),
+				    int16_t(meshopt_quantizeSnorm(vv[2] * scaler * sign, 12)),
+				    int16_t(qc)
+				};
+
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, BufferView::Filter_ReconstructQ};
+			return format;
 		}
+		else
+		{
+			for (size_t i = 0; i < data.size(); ++i)
+			{
+				const Attr& a = data[i];
 
-		BufferView::Filter filter = reconstruct ? BufferView::Filter_ReconstructW : BufferView::Filter_None;
+				int16_t v[4] = {
+					int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[3], 16)),
+				};
 
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, filter};
-		return format;
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, BufferView::Filter_None};
+			return format;
+		}
 	}
 	else if (type == cgltf_animation_path_type_weights)
 	{
